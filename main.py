@@ -75,8 +75,9 @@ def main_func():
         predictions = YoloV5.get_bounding_boxes(im, im0s)
 
         for prediction in predictions:
-            x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
-            rects.append([x_start, y_start, x_end, y_end])
+            if predictions[prediction]["confidence"] > 0.5:
+                x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
+                rects.append([x_start, y_start, x_end, y_end])
 
         # draw a horizontal line in the center of the frame -- once an
         # object crosses this line we will determine whether they were
