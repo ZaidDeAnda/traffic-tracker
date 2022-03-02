@@ -77,7 +77,6 @@ def main_func():
         for prediction in predictions:
             x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
             rects.append([x_start, y_start, x_end, y_end])
-        print(f"se encontraron {len(rects)} objetos")
 
         # draw a horizontal line in the center of the frame -- once an
         # object crosses this line we will determine whether they were
@@ -128,24 +127,23 @@ def main_func():
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
-            print("Objeto dibujado")
         # construct a tuple of information we will be displaying on the
-        # frame
-        info = [
-            ("Up", totalUp),
-            ("Down", totalDown),
-            ("Status", status),
-        ]
-        # loop over the info tuples and draw them on our frame
-        for (i, (k, v)) in enumerate(info):
-            text = "{}: {}".format(k, v)
-            cv2.putText(frame, text, (10, H - ((i * 20) + 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        # # frame
+        # info = [
+        #     ("Up", totalUp),
+        #     ("Down", totalDown),
+        #     ("Status", status),
+        # ]
+        # # loop over the info tuples and draw them on our frame
+        # for (i, (k, v)) in enumerate(info):
+        #     text = "{}: {}".format(k, v)
+        #     cv2.putText(frame, text, (10, H - ((i * 20) + 20)),
+        #         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         # check to see if we should write the frame to disk
         if writer is not None:
             writer.write(frame)
         # # show the output frame
-        cv2.imshow("Frame", frame)
+        # cv2.imshow("Frame", frame)
         key = cv2.waitKey(1) & 0xFF
         # if the `q` key was pressed, break from the loop
         if key == ord("q"):
