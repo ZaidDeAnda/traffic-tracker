@@ -52,7 +52,6 @@ def main_func():
         # resize the frame to have a maximum width of 500 pixels (the
         # less data we have, the faster we can process it), then convert
         # the frame from BGR to RGB for dlib
-        frame = imutils.resize(frame, width=500)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # if the frame dimensions are empty, set them
         if W is None or H is None:
@@ -75,7 +74,7 @@ def main_func():
         predictions = YoloV5.get_bounding_boxes(im, im0s)
 
         for prediction in predictions:
-            if predictions[prediction]["confidence"] > 0.5:
+            if predictions[prediction]["confidence"] > 0.7:
                 x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
                 array = np.array([x_start, y_start, x_end, y_end, predictions[prediction]["confidence"], predictions[prediction]["class"]])
                 rects = np.vstack((rects, array))
@@ -83,7 +82,7 @@ def main_func():
         # draw a horizontal line in the center of the frame -- once an
         # object crosses this line we will determine whether they were
         # moving 'up' or 'down'
-        cv2.line(frame, (0, H // 2), (W, H // 2), (0, 255, 255), 2)
+        cv2.line(frame, (0, H // 3), (W, H // 3), (0, 255, 255), 2)
         # use the centroid tracker to associate the (1) old object
         # centroids with (2) the newly computed object centroids
         objects = mot_tracker.update(rects)
@@ -92,7 +91,6 @@ def main_func():
             centroid_x = int((x_end + x_start)//2)
             centroid_y = int((y_end + y_start)//2)
             centroid = [centroid_x, centroid_y]
-            print(centroid)
             # check to see if a trackable object exists for the current
             # object ID
             to = trackableObjects.get(objectID, None)
@@ -129,7 +127,7 @@ def main_func():
             trackableObjects[objectID] = to
             # draw both the ID of the object and the centroid of the
             # object on the output frame
-            text = "ID {} + CLASS {}".format(objectID, class_id)
+            text = "{}".format(objectID)
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
