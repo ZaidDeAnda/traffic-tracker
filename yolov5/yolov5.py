@@ -10,7 +10,7 @@ from yolov5.utils.torch_utils import select_device, time_sync
 class YoloV5:
     def __init__(self):
         cwd = os.getcwd()
-        weights_path = cwd + "/yolov5/weights/best.pt"
+        weights_path = cwd + "/yolov5/weights/yolov5m.pt"
         yaml_path = cwd + "/yolov5/weights/data.yaml"
         self.weights = weights_path  # model.pt path(s)
         self.im = None

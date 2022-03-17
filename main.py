@@ -15,11 +15,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-def main_func():
-    output_path = "Output.mp4"
-
+def main_func(path_to_video : str, output_path : str = "Output.mp4", weights_path = "weights/yolov5m.pt"):
     print("[INFO] starting video stream...")
-    vs = cv2.VideoCapture("/home/zaid/github/traffic-tracker/petal_20220217_160339.mp4")
+    vs = cv2.VideoCapture(path_to_video)
     time.sleep(2.0)
 
     # initialize the video writer (we'll instantiate later if need be)
@@ -31,7 +29,7 @@ def main_func():
     # instantiate our centroid tracker, then initialize a list to store
     # each of our dlib correlation trackers, followed by a dictionary to
     # map each unique object ID to a TrackableObject
-    mot_tracker = Sort(max_age=30, min_hits=3, iou_threshold=0.5)
+    mot_tracker = Sort(max_age=30, min_hits=10, iou_threshold=0.5)
     trackableObjects = {}
     # initialize the total number of frames processed thus far, along
     # with the total number of objects that have moved either up or down
@@ -65,11 +63,9 @@ def main_func():
         # initialize the current status along with our list of bounding
         # box rectangles returned by either (1) our object detector or
         # (2) the correlation trackers
-        status = "Waiting"
         rects = np.zeros([6])
         # check to see if we should run a more computationally expensive
         # object detection method to aid our tracker
-        status = "Detecting"
         im, im0s = ImageLoader.PreprocessImage(rgb)
         predictions = YoloV5.get_bounding_boxes(im, im0s)
 
