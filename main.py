@@ -8,18 +8,16 @@ import numpy as np
 import argparse
 import imutils
 import time
-import dlib
 import cv2
+from sort import *
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
-def main_func():
-    output_path = "Output.mp4"
-
+def main_func(path_to_video : str, output_path : str = "Output.mp4", weights_path = "weights/yolov5m.pt"):
     print("[INFO] starting video stream...")
-    vs = cv2.VideoCapture("/home/zaid/github/traffic-tracker/petal_20220217_160339.mp4")
+    vs = cv2.VideoCapture(path_to_video)
     time.sleep(2.0)
 
     # initialize the video writer (we'll instantiate later if need be)
@@ -31,7 +29,7 @@ def main_func():
     # instantiate our centroid tracker, then initialize a list to store
     # each of our dlib correlation trackers, followed by a dictionary to
     # map each unique object ID to a TrackableObject
-    ct = CentroidTracker(maxDisappeared=40)
+    mot_tracker = Sort(max_age=30, min_hits=10, iou_threshold=0.5)
     trackableObjects = {}
     # initialize the total number of frames processed thus far, along
     # with the total number of objects that have moved either up or down
@@ -52,7 +50,6 @@ def main_func():
         # resize the frame to have a maximum width of 500 pixels (the
         # less data we have, the faster we can process it), then convert
         # the frame from BGR to RGB for dlib
-        frame = imutils.resize(frame, width=500)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # if the frame dimensions are empty, set them
         if W is None or H is None:
@@ -66,35 +63,37 @@ def main_func():
         # initialize the current status along with our list of bounding
         # box rectangles returned by either (1) our object detector or
         # (2) the correlation trackers
-        status = "Waiting"
-        rects = []
+        rects = np.zeros([6])
         # check to see if we should run a more computationally expensive
         # object detection method to aid our tracker
-        status = "Detecting"
         im, im0s = ImageLoader.PreprocessImage(rgb)
         predictions = YoloV5.get_bounding_boxes(im, im0s)
 
         for prediction in predictions:
-            x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
-            rects.append([x_start, y_start, x_end, y_end])
-        print(f"se encontraron {len(rects)} objetos")
-
+            if predictions[prediction]["confidence"] > 0.7:
+                x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
+                array = np.array([x_start, y_start, x_end, y_end, predictions[prediction]["confidence"], predictions[prediction]["class"]])
+                rects = np.vstack((rects, array))
+        rects = np.delete(rects, 0, 0)
         # draw a horizontal line in the center of the frame -- once an
         # object crosses this line we will determine whether they were
         # moving 'up' or 'down'
-        cv2.line(frame, (0, H // 2), (W, H // 2), (0, 255, 255), 2)
+        cv2.line(frame, (0, H // 3), (W, H // 3), (0, 255, 255), 2)
         # use the centroid tracker to associate the (1) old object
         # centroids with (2) the newly computed object centroids
-        objects = ct.update(rects)
-        # loop over the tracked objects
-        for (objectID, centroid) in objects.items():
+        objects = mot_tracker.update(rects)
+        #loop over the tracked objects
+        for (x_start, y_start, x_end, y_end, objectID, class_id) in objects:
+            centroid_x = int((x_end + x_start)//2)
+            centroid_y = int((y_end + y_start)//2)
+            centroid = [centroid_x, centroid_y]
             # check to see if a trackable object exists for the current
             # object ID
             to = trackableObjects.get(objectID, None)
             # if there is no existing trackable object, create one
             if to is None:
                 # print(f"nuevo registro {objectID}")
-                to = TrackableObject(objectID, centroid)
+                to = TrackableObject(objectID, centroid, class_id)
             # otherwise, there is a trackable object so we can utilize it
             # to determine direction
             else:
@@ -124,23 +123,10 @@ def main_func():
             trackableObjects[objectID] = to
             # draw both the ID of the object and the centroid of the
             # object on the output frame
-            text = "ID {}".format(objectID)
+            text = "{}".format(objectID)
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
-            print("Objeto dibujado")
-        # construct a tuple of information we will be displaying on the
-        # frame
-        info = [
-            ("Up", totalUp),
-            ("Down", totalDown),
-            ("Status", status),
-        ]
-        # loop over the info tuples and draw them on our frame
-        for (i, (k, v)) in enumerate(info):
-            text = "{}: {}".format(k, v)
-            cv2.putText(frame, text, (10, H - ((i * 20) + 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         # check to see if we should write the frame to disk
         if writer is not None:
             writer.write(frame)
