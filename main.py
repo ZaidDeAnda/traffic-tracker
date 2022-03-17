@@ -15,7 +15,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-def main_func(path_to_video : str, output_path : str = "Output.mp4", weights_path = "weights/yolov5m.pt"):
+def main_func(path_to_video : str, output_path : str = "Output.mp4", weights_path = "weights/yolov5m.pt", show_frames=False):
     print("[INFO] starting video stream...")
     vs = cv2.VideoCapture(path_to_video)
     time.sleep(2.0)
@@ -131,11 +131,12 @@ def main_func(path_to_video : str, output_path : str = "Output.mp4", weights_pat
         if writer is not None:
             writer.write(frame)
         # # show the output frame
-        cv2.imshow("Frame", frame)
-        key = cv2.waitKey(1) & 0xFF
-        # if the `q` key was pressed, break from the loop
-        if key == ord("q"):
-            break
+        if show_frames==True:
+            cv2.imshow("Frame", frame)
+            key = cv2.waitKey(1) & 0xFF
+            # if the `q` key was pressed, break from the loop
+            if key == ord("q"):
+                break
         # increment the total number of frames processed thus far and
         # then update the FPS counter
         totalFrames += 1
