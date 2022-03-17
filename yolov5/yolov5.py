@@ -31,7 +31,7 @@ class YoloV5:
         
 
     @torch.no_grad()
-    def get_bounding_boxes(self, im, im0s):  # use OpenCV DNN for ONNX inference)
+    def get_bounding_boxes(self, im, im0s, debug=False):  # use OpenCV DNN for ONNX inference)
 
 
         stride, pt, jit, onnx, engine = self.model.stride, self.model.pt, self.model.jit, self.model.onnx, self.model.engine
@@ -75,26 +75,29 @@ class YoloV5:
         if len(det):
             # Rescale boxes from img_size to im0 size
             det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0s.shape).round()
-            #Ahora sí itera sobre las detecciones
-            # Write results
-            for i, (*xyxy, conf, cls) in enumerate(reversed(det)):
-                xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh 
-                x_start = int(xyxy[0])
-                y_start = int(xyxy[1])
-                x_end = int(xyxy[2])
-                y_end = int(xyxy[3])
-                pred_dict[i] = {
-                    "class" : int(cls),
-                    "bounding_box" : {
-                        "x_start" : x_start,
-                        "y_start" : y_start,
-                        "x_end" : x_end,
-                        "y_end" : y_end,
-                        
-                    },
-                    "confidence" : float(conf),
-                }
-            return pred_dict
+            if debug == False:
+                return det
+            else:
+                #Ahora sí itera sobre las detecciones
+                # Write results
+                for i, (*xyxy, conf, cls) in enumerate(reversed(det)):
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh 
+                    x_start = int(xyxy[0])
+                    y_start = int(xyxy[1])
+                    x_end = int(xyxy[2])
+                    y_end = int(xyxy[3])
+                    pred_dict[i] = {
+                        "class" : int(cls),
+                        "bounding_box" : {
+                            "x_start" : x_start,
+                            "y_start" : y_start,
+                            "x_end" : x_end,
+                            "y_end" : y_end,
+                            
+                        },
+                        "confidence" : float(conf),
+                    }
+                return pred_dict
 
 @lru_cache()
 def get_yolov5():

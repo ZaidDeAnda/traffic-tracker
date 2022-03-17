@@ -9,133 +9,96 @@ import argparse
 import imutils
 import time
 import cv2
-from sort import *
+from deep_sort.utils.parser import get_config
+from deep_sort.deep_sort import DeepSort
+from yolov5.utils.general import xyxy2xywh
+from yolov5.utils.plots import Annotator
+from yolov5.utils.torch_utils import select_device
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
-def main_func():
-    output_path = "Output.mp4"
+def main_func(
+        path_to_video : str, 
+        deep_sort_model = "osnet_x0_25", 
+        device = "cpu",
+        output_path = "Output.mp4",
+        config_deepsort = "deep_sort/configs/deep_sort.yaml"
+    ):
 
+    cfg = get_config()
+    cfg.merge_from_file(config_deepsort)
+    device = select_device(device)
     print("[INFO] starting video stream...")
-    vs = cv2.VideoCapture("/home/zaid/github/traffic-tracker/petal_20220217_160339.mp4")
+    vs = cv2.VideoCapture(path_to_video)
     time.sleep(2.0)
-
-    # initialize the video writer (we'll instantiate later if need be)
     writer = None
-    # initialize the frame dimensions (we'll set them as soon as we read
-    # the first frame from the video)
     W = None
     H = None
-    # instantiate our centroid tracker, then initialize a list to store
-    # each of our dlib correlation trackers, followed by a dictionary to
-    # map each unique object ID to a TrackableObject
-    mot_tracker = Sort(max_age=30, min_hits=3, iou_threshold=0.5)
-    trackableObjects = {}
+    deepsort = DeepSort(deep_sort_model,
+                        device,
+                        max_dist=cfg.DEEPSORT.MAX_DIST,
+                        max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
+                        max_age=cfg.DEEPSORT.MAX_AGE, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
+                        )
     # initialize the total number of frames processed thus far, along
     # with the total number of objects that have moved either up or down
     totalFrames = 0
-    totalDown = 0
-    totalUp = 0
-    # start the frames per second throughput estimator
     fps = FPS().start()
-
-    # loop over frames from the video stream
+    names = {
+        0 : "car",
+        1 : "bus",
+        2 : "truck",
+        3 : "person",
+        4 : "motorbike"
+    }
     while True:
-        # grab the next frame and handle if we are reading from either
-        # VideoCapture or VideoStream
         frame = vs.read()
         frame = frame[1]
-        # if we are viewing a video and we did not grab a frame then we
-        # have reached the end of the video
-        # resize the frame to have a maximum width of 500 pixels (the
-        # less data we have, the faster we can process it), then convert
-        # the frame from BGR to RGB for dlib
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # if the frame dimensions are empty, set them
         if W is None or H is None:
             (H, W) = frame.shape[:2]
-        # if we are supposed to be writing a video to disk, initialize
-        # the writer
         if writer is None:
             fourcc = cv2.VideoWriter_fourcc(*"MJPG")
             writer = cv2.VideoWriter(output_path, fourcc, 30,
                 (W, H), True)
-        # initialize the current status along with our list of bounding
-        # box rectangles returned by either (1) our object detector or
-        # (2) the correlation trackers
-        status = "Waiting"
-        rects = np.zeros([6])
-        # check to see if we should run a more computationally expensive
-        # object detection method to aid our tracker
-        status = "Detecting"
         im, im0s = ImageLoader.PreprocessImage(rgb)
         predictions = YoloV5.get_bounding_boxes(im, im0s)
+        annotator = Annotator(im0s, line_width=2, pil=not ascii)
+        #agregar aquí que solo detecte como BB's aquellas dentro de cierta zona
+        xywhs = xyxy2xywh(predictions[:, 0:4])
+        confs = predictions[:, 4]
+        clss = predictions[:, 5]
+        outputs = deepsort.update(xywhs.cpu(), confs.cpu(), clss.cpu(), im0s)
 
-        for prediction in predictions:
-            if predictions[prediction]["confidence"] > 0.7:
-                x_start, y_start, x_end, y_end = predictions[prediction]["bounding_box"].values()
-                array = np.array([x_start, y_start, x_end, y_end, predictions[prediction]["confidence"], predictions[prediction]["class"]])
-                rects = np.vstack((rects, array))
-        rects = np.delete(rects, 0, 0)
-        # draw a horizontal line in the center of the frame -- once an
-        # object crosses this line we will determine whether they were
-        # moving 'up' or 'down'
-        cv2.line(frame, (0, H // 3), (W, H // 3), (0, 255, 255), 2)
-        # use the centroid tracker to associate the (1) old object
-        # centroids with (2) the newly computed object centroids
-        objects = mot_tracker.update(rects)
-        #loop over the tracked objects
-        for (x_start, y_start, x_end, y_end, objectID, class_id) in objects:
-            centroid_x = int((x_end + x_start)//2)
-            centroid_y = int((y_end + y_start)//2)
-            centroid = [centroid_x, centroid_y]
-            # check to see if a trackable object exists for the current
-            # object ID
-            to = trackableObjects.get(objectID, None)
-            # if there is no existing trackable object, create one
-            if to is None:
-                # print(f"nuevo registro {objectID}")
-                to = TrackableObject(objectID, centroid, class_id)
-            # otherwise, there is a trackable object so we can utilize it
-            # to determine direction
-            else:
-                # print(f"Continuando registro de {objectID}")
-                # the difference between the y-coordinate of the *current*
-                # centroid and the mean of *previous* centroids will tell
-                # us in which direction the object is moving (negative for
-                # 'up' and positive for 'down')
-                y = [c[1] for c in to.centroids]
-                direction = centroid[1] - np.mean(y)
-                to.centroids.append(centroid)
-                # check to see if the object has been counted or not
-                if not to.counted:
-                    # if the direction is negative (indicating the object
-                    # is moving up) AND the centroid is above the center
-                    # line, count the object
-                    if direction < 0 and centroid[1] < H // 2:
-                        totalUp += 1
-                        to.counted = True
-                    # if the direction is positive (indicating the object
-                    # is moving down) AND the centroid is below the
-                    # center line, count the object
-                    elif direction > 0 and centroid[1] > H // 2:
-                        totalDown += 1
-                        to.counted = True
-            # store the trackable object in our dictionary
-            trackableObjects[objectID] = to
-            # draw both the ID of the object and the centroid of the
-            # object on the output frame
-            text = "{}".format(objectID)
-            cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
+        # draw boxes for visualization
+        if len(outputs) > 0:
+            for j, (output, conf) in enumerate(zip(outputs, confs)):
+
+                bboxes = output[0:4]
+                id = output[4]
+                cls = output[5]
+
+                c = int(cls)  # integer class
+                label = f'{id} {names[c]} {conf:.2f}'
+                if names[c] == "car":
+                    color = (0,255,0)
+                elif names[c] == "bus":
+                    color = (255,0,0)
+                elif names[c] == "truck":
+                    color = (0,0,255)
+                elif names[c] == "person":
+                    color = (255,255,0)
+                elif names[c] == "motorbike":
+                    color = (0,255,255)
+                annotator.box_label(bboxes, label, color=color)
+        im0s = annotator.result()
         # check to see if we should write the frame to disk
         if writer is not None:
             writer.write(frame)
         # # show the output frame
-        cv2.imshow("Frame", frame)
+        #cv2.imshow("Frame", im0s)
         key = cv2.waitKey(1) & 0xFF
         # if the `q` key was pressed, break from the loop
         if key == ord("q"):
